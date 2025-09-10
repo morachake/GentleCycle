@@ -1,26 +1,57 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * GentleCycle Color System
+ * Based on the project requirements for a period tracking app
  */
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
-
 export const Colors = {
+  // Primary Colors
+  primary: '#E91E63',
+  primaryLight: '#F8BBD9',
+  primaryDeep: '#C2185B',
+  primarySoft: '#FCE4EC',
+
+  // Supporting Colors
+  calendarRed: '#F44336',
+  fertilityGreen: '#4CAF50',
+  ovulationOrange: '#FF9800',
+  pmsLavender: '#9C27B0',
+
+  // Neutral Colors
+  textDark: '#212121',
+  textMedium: '#757575',
+  textLight: '#BDBDBD',
+  background: '#FAFAFA',
+  cardWhite: '#FFFFFF',
+  divider: '#E0E0E0',
+
+  // Status Colors
+  success: '#2E7D32',
+  warning: '#F57C00',
+  error: '#D32F2F',
+  info: '#1976D2',
+
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: '#212121',
+    background: '#FAFAFA',
+    tint: '#E91E63',
+    icon: '#757575',
+    tabIconDefault: '#BDBDBD',
+    tabIconSelected: '#E91E63',
+    card: '#FFFFFF',
+    border: '#E0E0E0',
+    primary: '#E91E63',
+    secondary: '#F8BBD9',
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: '#FFFFFF',
+    background: '#121212',
+    tint: '#F8BBD9',
+    icon: '#BDBDBD',
+    tabIconDefault: '#757575',
+    tabIconSelected: '#F8BBD9',
+    card: '#1E1E1E',
+    border: '#333333',
+    primary: '#F8BBD9',
+    secondary: '#E91E63',
   },
 };
