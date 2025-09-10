@@ -1,50 +1,114 @@
-# Welcome to your Expo app 👋
+# GentleCycle 🌸
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A comprehensive period tracking and menstrual health app built with React Native and Expo.
 
-## Get started
+## Features
+
+- 📅 **Period Calendar**: Visual cycle tracking with color-coded phases
+- 📊 **Analytics**: Real-time insights and cycle statistics  
+- 🩸 **Symptom Tracking**: Daily mood, energy, and symptom logging
+- 🔔 **Smart Notifications**: Period and fertility reminders
+- 📈 **Cycle Predictions**: AI-powered cycle forecasting
+- 🔒 **Privacy First**: All data stored locally on device
+
+## Get Started
 
 1. Install dependencies
-
    ```bash
    npm install
    ```
 
 2. Start the app
-
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+## Important: Notifications & Development Build
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+⚠️ **For full functionality, use a development build instead of Expo Go**
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+With Expo SDK 53+, push notifications are not fully supported in Expo Go. To enable all features:
 
-## Get a fresh project
+### Create a Development Build
 
-When you're ready, run:
+1. Install EAS CLI
+   ```bash
+   npm install -g eas-cli
+   ```
 
-```bash
-npm run reset-project
+2. Configure EAS
+   ```bash
+   eas build:configure
+   ```
+
+3. Build for your platform
+   ```bash
+   # For iOS
+   eas build --platform ios --profile development
+   
+   # For Android  
+   eas build --platform android --profile development
+   ```
+
+4. Install the development build on your device
+
+### What Works in Expo Go vs Development Build
+
+| Feature | Expo Go | Development Build |
+|---------|---------|------------------|
+| Period Tracking | ✅ Full | ✅ Full |
+| Calendar & Analytics | ✅ Full | ✅ Full |
+| Data Storage | ✅ Full | ✅ Full |
+| Push Notifications | ⚠️ Limited | ✅ Full |
+| Local Notifications | ✅ Full | ✅ Full |
+
+## Database
+
+GentleCycle uses SQLite for local data storage:
+- All data is stored on-device for privacy
+- No cloud sync or external servers
+- Data persists between app launches
+- Export/import functionality for backups
+
+## App Structure
+
+```
+app/
+├── (tabs)/
+│   ├── index.tsx          # Home/Dashboard
+│   ├── calendar.tsx       # Period Calendar  
+│   ├── analytics.tsx      # Insights & Charts
+│   ├── symptoms.tsx       # Daily Symptom Entry
+│   └── settings.tsx       # App Settings
+lib/
+├── database/              # SQLite operations
+├── services/              # Data services
+└── utils/                 # Utility functions
+components/
+├── ui/                    # Reusable UI components
+├── period/                # Period-specific components
+└── modals/                # Modal dialogs
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Development
 
-## Learn more
+- **Framework**: React Native with Expo
+- **Navigation**: Expo Router (file-based routing)
+- **Database**: Expo SQLite
+- **UI**: Custom components with consistent theming
+- **Charts**: React Native Chart Kit
+- **Notifications**: Expo Notifications
 
-To learn more about developing your project with Expo, look at the following resources:
+## Learn More
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- [Expo Documentation](https://docs.expo.dev/)
+- [Development Builds](https://docs.expo.dev/develop/development-builds/introduction/)
+- [React Native](https://reactnative.dev/)
 
-## Join the community
+## Privacy
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+GentleCycle prioritizes user privacy:
+- All data stored locally on device
+- No user accounts or cloud storage required  
+- No data collection or analytics tracking
+- Full user control over data export/import

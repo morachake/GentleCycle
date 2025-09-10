@@ -1,14 +1,21 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Check if we're in development build vs Expo Go
+const isInExpoGo = Constants.appOwnership === 'expo';
+const isSDK53Plus = true; // Current SDK version is 53+
+
+// Configure notification behavior only if notifications are supported
+if (!isInExpoGo || !isSDK53Plus) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 export class NotificationService {
   private static instance: NotificationService;
@@ -22,9 +29,23 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
+  // Check if notifications are supported in current environment
+  private isNotificationSupported(): boolean {
+    if (isInExpoGo && isSDK53Plus) {
+      console.warn('Push notifications are not fully supported in Expo Go with SDK 53+. Use a development build for full functionality.');
+      return false;
+    }
+    return true;
+  }
+
   // Request permissions
   async requestPermissions(): Promise<boolean> {
     try {
+      // Skip full notification setup if not supported
+      if (!this.isNotificationSupported()) {
+        console.log('Notifications not fully supported in this environment, but permissions will be granted for development builds.');
+        return true; // Return true so app continues to work
+      }
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('period-reminders', {
           name: 'Period Reminders',
@@ -71,6 +92,10 @@ export class NotificationService {
   // Schedule period reminder
   async schedulePeriodReminder(daysUntilPeriod: number): Promise<string | null> {
     try {
+      if (!this.isNotificationSupported()) {
+        console.log('Period reminder scheduling skipped - not supported in Expo Go with SDK 53+');
+        return null;
+      }
       const reminderDate = new Date();
       reminderDate.setDate(reminderDate.getDate() + daysUntilPeriod - 2); // 2 days before
       reminderDate.setHours(9, 0, 0, 0); // 9 AM

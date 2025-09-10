@@ -12,6 +12,9 @@ import { PregnancyRiskIndicator } from '@/components/pregnancy/PregnancyRiskIndi
 import { PregnancyRiskCalculator } from '@/lib/utils/pregnancyRisk';
 import { PeriodLogModal } from '@/components/modals/PeriodLogModal';
 import { OvulationModal } from '@/components/modals/OvulationModal';
+import { cycleDataService } from '@/lib/services/CycleDataService';
+import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -27,15 +30,130 @@ export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   
+  const [isLoading, setIsLoading] = useState(true);
   const [cycleData, setCycleData] = useState<CycleData>({
-    currentDay: 14,
+    currentDay: 1,
     phase: CyclePhase.FOLLICULAR,
-    daysUntilNextPeriod: 14,
+    daysUntilNextPeriod: 28,
     averageCycleLength: 28,
-    currentStreak: 5,
+    currentStreak: 0,
+  });
+  const [todayFlow, setTodayFlow] = useState<FlowIntensity>(FlowIntensity.NONE);
+  const [todaysEntry, setTodaysEntry] = useState<any>(null);
+  const [stats, setStats] = useState({
+    totalCycles: 0,
+    averageCycleLength: 28,
+    averagePeriodLength: 5,
+    regularityScore: 0,
   });
 
-  const [todayFlow, setTodayFlow] = useState<FlowIntensity>(FlowIntensity.NONE);
+  // Load real user data on mount and when screen comes into focus
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Reload data when user navigates back to this screen
+  useFocusEffect(
+    React.useCallback(() => {
+      loadDashboardData();
+    }, [])
+  );
+
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get today's entry
+      const dailyEntry = await cycleDataService.getDailyEntry(today);
+      console.log('Today\'s entry loaded:', dailyEntry);
+      console.log('Symptoms count:', dailyEntry?.symptoms?.length || 0);
+      setTodaysEntry(dailyEntry);
+      
+      // Get today's flow data
+      const todaysFlow = await cycleDataService.getFlowForDate(today);
+      setTodayFlow(todaysFlow);
+      
+      // Get cycle statistics
+      const cycleStats = await cycleDataService.getCycleStatistics();
+      setStats(cycleStats);
+      
+      // Get all periods to calculate current cycle day
+      const periods = await cycleDataService.getAllPeriods();
+      
+      if (periods.length > 0) {
+        try {
+          // Try to get predictions, but handle gracefully if no data
+          const predictions = await cycleDataService.calculatePredictions();
+          
+          // Find the most recent period
+          const recentPeriods = periods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          const lastPeriod = recentPeriods[0];
+          
+          // Calculate current cycle day
+          const lastPeriodDate = new Date(lastPeriod.startDate);
+          const todayDate = new Date(today);
+          const daysDiff = Math.floor((todayDate.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
+          const currentCycleDay = daysDiff + 1;
+          
+          // Calculate days until next period
+          const daysUntilNext = Math.max(0, cycleStats.averageCycleLength - currentCycleDay + 1);
+          
+          // Determine current phase
+          const currentPhase = await cycleDataService.getCurrentCyclePhase(today);
+          
+          setCycleData({
+            currentDay: currentCycleDay,
+            phase: currentPhase,
+            daysUntilNextPeriod: daysUntilNext,
+            averageCycleLength: cycleStats.averageCycleLength,
+            currentStreak: periods.length,
+          });
+        } catch (predictionError) {
+          console.log('Using basic cycle calculation due to limited data');
+          // Use basic calculation if predictions fail
+          const recentPeriods = periods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          const lastPeriod = recentPeriods[0];
+          
+          const lastPeriodDate = new Date(lastPeriod.startDate);
+          const todayDate = new Date(today);
+          const daysDiff = Math.floor((todayDate.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
+          const currentCycleDay = daysDiff + 1;
+          
+          setCycleData({
+            currentDay: currentCycleDay,
+            phase: CyclePhase.FOLLICULAR,
+            daysUntilNextPeriod: Math.max(0, 28 - currentCycleDay + 1),
+            averageCycleLength: cycleStats.averageCycleLength || 28,
+            currentStreak: periods.length,
+          });
+        }
+      } else {
+        // No period data at all - use defaults
+        setCycleData({
+          currentDay: 1,
+          phase: CyclePhase.FOLLICULAR,
+          daysUntilNextPeriod: 28,
+          averageCycleLength: 28,
+          currentStreak: 0,
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      // Set safe defaults
+      setCycleData({
+        currentDay: 1,
+        phase: CyclePhase.FOLLICULAR,
+        daysUntilNextPeriod: 28,
+        averageCycleLength: 28,
+        currentStreak: 0,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Calculate pregnancy risk for today
   const pregnancyRiskData = PregnancyRiskCalculator.calculateRisk(
@@ -69,11 +187,19 @@ export default function DashboardScreen() {
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [showOvulationModal, setShowOvulationModal] = useState(false);
 
+  // Helper function for dynamic greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   const quickActions = [
     { title: 'Log Period', emoji: '🩸', action: () => setShowPeriodModal(true) },
-    { title: 'Add Ovulation', emoji: '🥚', action: () => setShowOvulationModal(true) },
-    { title: 'Add Symptoms', emoji: '🤕', action: () => console.log('Add symptoms') },
-    { title: 'Mood Check', emoji: '😊', action: () => console.log('Mood check') },
+    { title: 'Add Symptoms', emoji: '🤕', action: () => router.push('/symptoms') },
+    { title: 'View Calendar', emoji: '📅', action: () => router.push('/calendar') },
+    { title: 'See Analytics', emoji: '📊', action: () => router.push('/analytics') },
   ];
 
   return (
@@ -82,7 +208,7 @@ export default function DashboardScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.greeting, { color: colors.text }]}>
-            Good morning! 👋
+            {getGreeting()} 👋
           </Text>
           <Text style={[styles.date, { color: Colors.textMedium }]}>
             {new Date().toLocaleDateString('en-US', { 
@@ -179,7 +305,10 @@ export default function DashboardScreen() {
               Symptoms:
             </Text>
             <Text style={[styles.trackingValue, { color: colors.text }]}>
-              Not logged
+              {todaysEntry?.symptoms && todaysEntry.symptoms.length > 0 
+                ? `${todaysEntry.symptoms.length} symptom${todaysEntry.symptoms.length > 1 ? 's' : ''}`
+                : 'Not logged'
+              }
             </Text>
           </View>
           
@@ -188,7 +317,10 @@ export default function DashboardScreen() {
               Mood:
             </Text>
             <Text style={[styles.trackingValue, { color: colors.text }]}>
-              Not logged
+              {todaysEntry?.mood 
+                ? todaysEntry.mood.charAt(0).toUpperCase() + todaysEntry.mood.slice(1)
+                : 'Not logged'
+              }
             </Text>
           </View>
         </Card>
@@ -230,18 +362,18 @@ export default function DashboardScreen() {
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.text }]}>
-                {cycleData.currentStreak}
+                {stats.averagePeriodLength}
               </Text>
               <Text style={[styles.statLabel, { color: Colors.textMedium }]}>
-                Days Tracked
+                Avg Period Length
               </Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.text }]}>
-                96%
+                {stats.totalCycles}
               </Text>
               <Text style={[styles.statLabel, { color: Colors.textMedium }]}>
-                Accuracy
+                Total Cycles
               </Text>
             </View>
           </View>
@@ -382,7 +514,7 @@ const styles = StyleSheet.create({
     padding: Theme.spacing.sm,
   },
   actionEmoji: {
-    fontSize: 24,
+    fontSize: 20,
     marginBottom: Theme.spacing.xs,
   },
   actionTitle: {

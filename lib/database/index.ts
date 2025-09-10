@@ -229,6 +229,43 @@ class DatabaseManager {
     );
   }
 
+  async getAllPeriods(): Promise<Period[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    const periodResults = await this.db.getAllAsync<any>('SELECT * FROM periods ORDER BY start_date DESC');
+    
+    const periods = await Promise.all(
+      periodResults.map(async (row) => {
+        // Get period days for this period
+        const dayResults = await this.db!.getAllAsync<any>(
+          'SELECT * FROM period_days WHERE period_id = ? ORDER BY date',
+          [row.id]
+        );
+        
+        const days = dayResults.map(dayRow => ({
+          id: dayRow.id,
+          periodId: dayRow.period_id,
+          date: dayRow.date,
+          flow: dayRow.flow as FlowIntensity,
+          symptoms: [], // Will be populated separately if needed
+          notes: dayRow.notes,
+        }));
+        
+        return {
+          id: row.id,
+          cycleId: row.cycle_id,
+          startDate: row.start_date,
+          endDate: row.end_date,
+          days,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      })
+    );
+    
+    return periods;
+  }
+
   // Daily Entry Methods
   async createDailyEntry(entry: Omit<DailyEntry, 'createdAt' | 'updatedAt' | 'symptoms'>): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
@@ -243,6 +280,22 @@ class DatabaseManager {
         entry.energyLevel,
         entry.weight || null,
         entry.notes || null,
+      ]
+    );
+  }
+
+  async updateDailyEntry(entry: Omit<DailyEntry, 'createdAt' | 'updatedAt' | 'symptoms'>): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync(
+      `UPDATE daily_entries 
+       SET mood = ?, energy_level = ?, weight = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        entry.mood || null,
+        entry.energyLevel,
+        entry.weight || null,
+        entry.notes || null,
+        entry.id,
       ]
     );
   }
@@ -284,6 +337,14 @@ class DatabaseManager {
     );
   }
 
+  async deleteSymptomsByDate(date: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync(
+      'DELETE FROM symptoms WHERE date = ?',
+      [date]
+    );
+  }
+
   async getSymptomsByDate(date: string): Promise<Symptom[]> {
     if (!this.db) throw new Error('Database not initialized');
 
@@ -299,6 +360,51 @@ class DatabaseManager {
       date: row.date,
       notes: row.notes,
     }));
+  }
+
+  /**
+   * Get all symptoms for analytics
+   */
+  async getAllSymptoms(): Promise<Symptom[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const results = await this.db.getAllAsync<any>('SELECT * FROM symptoms ORDER BY date DESC');
+
+    return results.map(row => ({
+      id: row.id,
+      type: row.type as SymptomType,
+      severity: row.severity,
+      date: row.date,
+      notes: row.notes,
+    }));
+  }
+
+  /**
+   * Get all daily entries for analytics
+   */
+  async getAllDailyEntries(): Promise<DailyEntry[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const results = await this.db.getAllAsync<any>('SELECT * FROM daily_entries ORDER BY date DESC');
+
+    const dailyEntries = await Promise.all(
+      results.map(async (row) => {
+        const symptoms = await this.getSymptomsByDate(row.date);
+        return {
+          id: row.id,
+          date: row.date,
+          mood: row.mood as MoodType,
+          energyLevel: row.energy_level,
+          weight: row.weight,
+          notes: row.notes,
+          symptoms,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      })
+    );
+
+    return dailyEntries;
   }
 
   // Utility Methods

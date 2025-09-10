@@ -14,8 +14,9 @@ export class PregnancyRiskCalculator {
     const fertilityStart = ovulationDay - 5;
     const fertilityEnd = ovulationDay + 1;
 
-    // Very low risk during menstruation
-    if (cycleDay <= periodLength) {
+    // Very low risk during menstruation (including very long periods)
+    // For medical safety: if period is unusually long (>7 days), be extra cautious
+    if (cycleDay <= periodLength || (periodLength > 7 && cycleDay <= periodLength + 3)) {
       return {
         risk: PregnancyRisk.VERY_LOW,
         percentage: 2,

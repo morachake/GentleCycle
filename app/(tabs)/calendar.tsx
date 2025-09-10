@@ -6,13 +6,15 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { PregnancyRiskCalculator } from '@/lib/utils/pregnancyRisk';
 import { CyclePhase, FlowIntensity } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { Calendar, CalendarProps } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DataEntryScreen } from '@/components/screens/DataEntryScreen';
 import Modal from 'react-native-modal';
+import { cycleDataService } from '@/lib/services/CycleDataService';
+import { DayDetailModal } from '@/components/modals/DayDetailModal';
 
 interface MarkedDate {
   selected?: boolean;
@@ -31,322 +33,410 @@ export default function CalendarScreen() {
   
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDataEntryScreen, setShowDataEntryScreen] = useState(false);
+  const [showDayDetailModal, setShowDayDetailModal] = useState(false);
+  const [userPeriodDates, setUserPeriodDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [cycleStats, setCycleStats] = useState({
+    averageCycleLength: 28,
+    averagePeriodLength: 5,
+  });
+
+  // Load real user data on component mount
+  useEffect(() => {
+    loadUserCycleData();
+  }, []);
+
+  const loadUserCycleData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get user's period data from service
+      const periods = await cycleDataService.getAllPeriods();
+      const stats = await cycleDataService.getCycleStatistics();
+      
+      // Extract period start dates
+      const periodStartDates = periods.map(period => period.startDate).sort();
+      
+      setUserPeriodDates(periodStartDates);
+      setCycleStats({
+        averageCycleLength: stats.averageCycleLength,
+        averagePeriodLength: stats.averagePeriodLength,
+      });
+      
+    } catch (error) {
+      console.error('Error loading cycle data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Get today's date for current context
   const today = new Date().toISOString().split('T')[0];
 
-  // Mock data for demonstration - Enhanced with comprehensive cycle data
-  const mockCycleData: Record<string, { 
-    phase: CyclePhase; 
-    flow: FlowIntensity; 
-    isOvulation?: boolean;
-    pregnancyRisk?: 'high' | 'medium' | 'low';
-    isPredicted?: boolean;
-  }> = {
-    // Previous period days (September)
-    '2024-09-05': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.HEAVY, pregnancyRisk: 'low' },
-    '2024-09-06': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.MEDIUM, pregnancyRisk: 'low' },
-    '2024-09-07': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.LIGHT, pregnancyRisk: 'low' },
-    '2024-09-08': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.SPOTTING, pregnancyRisk: 'low' },
-    
-    // Follicular phase progression
-    '2024-09-09': { phase: CyclePhase.FOLLICULAR, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    '2024-09-10': { phase: CyclePhase.FOLLICULAR, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    '2024-09-11': { phase: CyclePhase.FOLLICULAR, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    '2024-09-12': { phase: CyclePhase.FOLLICULAR, flow: FlowIntensity.NONE, pregnancyRisk: 'medium' },
-    '2024-09-13': { phase: CyclePhase.FOLLICULAR, flow: FlowIntensity.NONE, pregnancyRisk: 'medium' },
-    
-    // Ovulation window (peak fertility - 3 day window)
-    '2024-09-14': { phase: CyclePhase.OVULATION, flow: FlowIntensity.NONE, isOvulation: true, pregnancyRisk: 'high' },
-    '2024-09-15': { phase: CyclePhase.OVULATION, flow: FlowIntensity.NONE, isOvulation: true, pregnancyRisk: 'high' },
-    '2024-09-16': { phase: CyclePhase.OVULATION, flow: FlowIntensity.NONE, isOvulation: true, pregnancyRisk: 'high' },
-    
-    // Post-ovulation high risk days
-    '2024-09-17': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'high' },
-    '2024-09-18': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'medium' },
-    '2024-09-19': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'medium' },
-    
-    // Luteal phase continuation
-    '2024-09-20': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    '2024-09-21': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    '2024-09-25': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    '2024-09-30': { phase: CyclePhase.LUTEAL, flow: FlowIntensity.NONE, pregnancyRisk: 'low' },
-    
-    // Predicted next period (October) - Show upcoming predictions
-    '2024-10-03': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.MEDIUM, pregnancyRisk: 'low', isPredicted: true },
-    '2024-10-04': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.MEDIUM, pregnancyRisk: 'low', isPredicted: true },
-    '2024-10-05': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.LIGHT, pregnancyRisk: 'low', isPredicted: true },
-    '2024-10-06': { phase: CyclePhase.MENSTRUAL, flow: FlowIntensity.LIGHT, pregnancyRisk: 'low', isPredicted: true },
-    
-    // Future fertility window predictions
-    '2024-10-17': { phase: CyclePhase.OVULATION, flow: FlowIntensity.NONE, isOvulation: true, pregnancyRisk: 'high', isPredicted: true },
-    '2024-10-18': { phase: CyclePhase.OVULATION, flow: FlowIntensity.NONE, isOvulation: true, pregnancyRisk: 'high', isPredicted: true },
-    '2024-10-19': { phase: CyclePhase.OVULATION, flow: FlowIntensity.NONE, isOvulation: true, pregnancyRisk: 'high', isPredicted: true },
+  // Calculate cycle data based on user's logged period start dates
+  const calculateCycleData = () => {
+    const cycleData: Record<string, { 
+      phase: CyclePhase; 
+      flow: FlowIntensity; 
+      isOvulation?: boolean;
+      pregnancyRisk?: 'high' | 'medium' | 'low' | 'very_high' | 'very_low';
+      pregnancyRiskData?: any;
+      cycleDay?: number;
+      isPredicted?: boolean;
+      isStart?: boolean;
+      isEnd?: boolean;
+    }> = {};
+
+    const avgCycleLength = cycleStats.averageCycleLength || 28;
+    const avgPeriodLength = cycleStats.averagePeriodLength || 5;
+
+    userPeriodDates.forEach((periodStart, index) => {
+      const startDate = new Date(periodStart);
+      
+      // Add actual period days
+      for (let i = 0; i < avgPeriodLength; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(currentDate.getDate() + i);
+        const dateString = currentDate.toISOString().split('T')[0];
+        
+        cycleData[dateString] = {
+          phase: CyclePhase.MENSTRUAL,
+          flow: i === 0 ? FlowIntensity.HEAVY : i === 1 ? FlowIntensity.HEAVY : i === 2 ? FlowIntensity.MEDIUM : i === 3 ? FlowIntensity.LIGHT : FlowIntensity.SPOTTING,
+          pregnancyRisk: 'low',
+          isStart: i === 0,
+          isEnd: i === avgPeriodLength - 1,
+        };
+      }
+
+      // Add follicular phase (days 6-13 of cycle)
+      for (let i = avgPeriodLength; i < 13; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(currentDate.getDate() + i);
+        const dateString = currentDate.toISOString().split('T')[0];
+        
+        cycleData[dateString] = {
+          phase: CyclePhase.FOLLICULAR,
+          flow: FlowIntensity.NONE,
+          pregnancyRisk: i >= 10 ? 'medium' : 'low',
+        };
+      }
+
+      // Calculate ovulation day (14 days before expected next period)
+      const ovulationDay = avgCycleLength - 14;
+      const fertileWindowStart = Math.max(ovulationDay - 5, avgPeriodLength);
+      const fertileWindowEnd = Math.min(ovulationDay + 2, avgCycleLength - 1);
+      
+      // Add fertile window with gradient risk levels
+      for (let i = fertileWindowStart; i <= fertileWindowEnd; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(currentDate.getDate() + i);
+        const dateString = currentDate.toISOString().split('T')[0];
+        
+        // Peak ovulation day
+        const isOvulationPeak = i === ovulationDay;
+        // High fertility days (2 days before and day of ovulation)
+        const isHighFertility = i >= ovulationDay - 2 && i <= ovulationDay;
+        // Medium fertility days (fertile window edges)
+        const isMediumFertility = !isHighFertility && i >= fertileWindowStart && i <= fertileWindowEnd;
+        
+        cycleData[dateString] = {
+          phase: isOvulationPeak ? CyclePhase.OVULATION : CyclePhase.FOLLICULAR,
+          flow: FlowIntensity.NONE,
+          isOvulation: isOvulationPeak,
+          pregnancyRisk: isHighFertility ? 'high' : isMediumFertility ? 'medium' : 'low',
+        };
+      }
+
+      // Add luteal phase (after ovulation until next period)
+      const lutealStart = fertileWindowEnd + 1;
+      for (let i = lutealStart; i < avgCycleLength; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(currentDate.getDate() + i);
+        const dateString = currentDate.toISOString().split('T')[0];
+        
+        // Early luteal phase has some pregnancy risk, late luteal is safer
+        const daysAfterOvulation = i - ovulationDay;
+        let riskLevel: 'high' | 'medium' | 'low' = 'low';
+        
+        if (daysAfterOvulation <= 1) {
+          riskLevel = 'high'; // Implantation window
+        } else if (daysAfterOvulation <= 3) {
+          riskLevel = 'medium'; // Early luteal
+        } else {
+          riskLevel = 'low'; // Late luteal/safe period
+        }
+        
+        cycleData[dateString] = {
+          phase: CyclePhase.LUTEAL,
+          flow: FlowIntensity.NONE,
+          pregnancyRisk: riskLevel,
+        };
+      }
+
+      // Predict multiple cycles ahead (6 months into the future)
+      const today = new Date();
+      const sixMonthsFromNow = new Date();
+      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+      
+      for (let cycleCount = 1; cycleCount <= 6; cycleCount++) {
+        const nextPeriodStart = new Date(startDate);
+        nextPeriodStart.setDate(nextPeriodStart.getDate() + (avgCycleLength * cycleCount));
+        
+        // Only add predictions for future dates and within 6 months
+        if (nextPeriodStart > today && nextPeriodStart <= sixMonthsFromNow) {
+          // Predict period days
+          for (let i = 0; i < avgPeriodLength; i++) {
+            const currentDate = new Date(nextPeriodStart);
+            currentDate.setDate(currentDate.getDate() + i);
+            const dateString = currentDate.toISOString().split('T')[0];
+            
+            cycleData[dateString] = {
+              phase: CyclePhase.MENSTRUAL,
+              flow: i === 0 ? FlowIntensity.MEDIUM : i === 1 ? FlowIntensity.HEAVY : i === 2 ? FlowIntensity.MEDIUM : i === 3 ? FlowIntensity.LIGHT : FlowIntensity.LIGHT,
+              pregnancyRisk: 'low',
+              isPredicted: true,
+              isStart: i === 0,
+              isEnd: i === avgPeriodLength - 1,
+            };
+          }
+
+          // Predict ovulation for this cycle
+          const ovulationDayInCycle = avgCycleLength - 14;
+          const fertileStart = Math.max(ovulationDayInCycle - 5, avgPeriodLength);
+          const fertileEnd = Math.min(ovulationDayInCycle + 2, avgCycleLength - 1);
+          
+          // Add fertile window
+          for (let i = fertileStart; i <= fertileEnd; i++) {
+            const currentDate = new Date(nextPeriodStart);
+            currentDate.setDate(currentDate.getDate() + i);
+            const dateString = currentDate.toISOString().split('T')[0];
+            
+            const isOvulationPeak = i === ovulationDayInCycle;
+            const isHighFertility = i >= ovulationDayInCycle - 2 && i <= ovulationDayInCycle;
+            const isMediumFertility = !isHighFertility && i >= fertileStart && i <= fertileEnd;
+            
+            // Don't overwrite period days
+            if (!cycleData[dateString]) {
+              cycleData[dateString] = {
+                phase: isOvulationPeak ? CyclePhase.OVULATION : CyclePhase.FOLLICULAR,
+                flow: FlowIntensity.NONE,
+                isOvulation: isOvulationPeak,
+                pregnancyRisk: isHighFertility ? 'high' : isMediumFertility ? 'medium' : 'low',
+                isPredicted: true,
+              };
+            }
+          }
+        }
+      }
+    });
+
+    return cycleData;
+  };
+
+  const cycleData = calculateCycleData();
+
+  // Handle date press - show day detail modal
+  const handleDatePress = (day: any) => {
+    const pressedDate = day.dateString;
+    setSelectedDate(pressedDate);
+    setShowDayDetailModal(true);
   };
 
   const getMarkedDates = () => {
     const marked: { [key: string]: MarkedDate } = {};
     
-    // Mark cycle data with enhanced visual indicators
-    Object.entries(mockCycleData).forEach(([date, data]) => {
-      let dotColor = Colors.primary;
-      let selectedColor = Colors.primary;
+    // Enhanced cycle data with better visual indicators - keeping date numbers visible
+    Object.entries(cycleData).forEach(([date, data]) => {
+      let dotColor = 'transparent'; // Remove dots, use borders instead
       let customStyles: any = {};
-      let backgroundColor = 'transparent';
-      let textColor = Colors.textDark;
-      let borderColor = 'transparent';
-      let borderWidth = 0;
       let isSelected = date === selectedDate;
+      let isToday = date === today;
       
-      // Base styling for all marked dates
-      const baseStyles = {
-        container: {
-          borderRadius: 16,
-          width: 32,
-          height: 32,
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'relative',
-        },
-        text: {
-          fontSize: 16,
-          fontWeight: '600' as const,
-          textAlign: 'center' as const,
-        }
+      // Base styling - always keep text visible
+      const baseContainerStyle = {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'transparent', // Always transparent background
       };
       
-      // Determine styling based on cycle phase and special conditions
-      if (data.isOvulation) {
-        // Ovulation days - highest priority styling
-        backgroundColor = Colors.ovulationOrange + '25';
-        borderColor = Colors.ovulationOrange;
-        borderWidth = 2;
-        textColor = Colors.ovulationOrange;
-        dotColor = Colors.ovulationOrange;
-        
-        // Add ovulation indicator
-        customStyles = {
-          container: {
-            ...baseStyles.container,
-            backgroundColor,
-            borderColor,
-            borderWidth,
-            position: 'relative',
-          },
-          text: {
-            ...baseStyles.text,
-            color: textColor,
-            fontWeight: 'bold',
-          }
-        };
-        
-      } else if (data.phase === CyclePhase.MENSTRUAL) {
-        // Period days
+      const baseTextStyle = {
+        fontSize: 16,
+        fontWeight: '500' as const,
+        textAlign: 'center' as const,
+        color: Colors.textDark, // Default readable text
+      };
+
+      // Determine border styling based on cycle data
+      let borderColor = 'transparent';
+      let borderWidth = 0;
+      let backgroundColor = 'transparent';
+      let textColor = Colors.textDark;
+      let borderStyle: 'solid' | 'dashed' = 'solid';
+
+      // Priority 1: Period days (most important)
+      if (data.phase === CyclePhase.MENSTRUAL) {
         if (data.isPredicted) {
-          // Predicted period - dashed border
-          backgroundColor = Colors.calendarRed + '15';
+          // Future expected period - dashed red border
           borderColor = Colors.calendarRed;
-          borderWidth = 2;
-          textColor = Colors.calendarRed;
-          customStyles = {
-            container: {
-              ...baseStyles.container,
-              backgroundColor,
-              borderColor,
-              borderWidth,
-              borderStyle: 'dashed',
-              opacity: 0.8,
-            },
-            text: {
-              ...baseStyles.text,
-              color: textColor,
-              fontWeight: 'bold',
-            }
-          };
+          borderWidth = data.isStart || data.isEnd ? 3 : 2; // Thicker border for start/end
+          borderStyle = 'dashed';
+          backgroundColor = 'transparent'; // Keep background transparent
+          textColor = Colors.textDark; // Use dark text for visibility
         } else {
-          // Actual period
-          backgroundColor = Colors.calendarRed + '20';
+          // Actual logged period - solid red border with very light fill
           borderColor = Colors.calendarRed;
-          borderWidth = 2;
-          textColor = Colors.cardWhite;
-          customStyles = {
-            container: {
-              ...baseStyles.container,
-              backgroundColor: Colors.calendarRed,
-              borderColor: Colors.calendarRed,
-              borderWidth,
-            },
-            text: {
-              ...baseStyles.text,
-              color: textColor,
-              fontWeight: 'bold',
-            }
-          };
-        }
-        dotColor = Colors.calendarRed;
-        
-      } else if (data.pregnancyRisk === 'high') {
-        // High pregnancy risk days
-        backgroundColor = Colors.error + '20';
-        borderColor = Colors.error;
-        borderWidth = 2;
-        textColor = Colors.error;
-        customStyles = {
-          container: {
-            ...baseStyles.container,
-            backgroundColor,
-            borderColor,
-            borderWidth,
-            // Add subtle pulse effect indicator
-          },
-          text: {
-            ...baseStyles.text,
-            color: textColor,
-            fontWeight: 'bold',
-          }
-        };
-        dotColor = Colors.error;
-        
-      } else if (data.pregnancyRisk === 'medium') {
-        // Medium pregnancy risk days
-        backgroundColor = Colors.warning + '15';
-        borderColor = Colors.warning;
-        borderWidth = 1.5;
-        textColor = Colors.warning;
-        customStyles = {
-          container: {
-            ...baseStyles.container,
-            backgroundColor,
-            borderColor,
-            borderWidth,
-          },
-          text: {
-            ...baseStyles.text,
-            color: textColor,
-            fontWeight: '600',
-          }
-        };
-        dotColor = Colors.warning;
-        
-      } else {
-        // Other cycle phases with subtle indicators
-        switch (data.phase) {
-          case CyclePhase.FOLLICULAR:
-            backgroundColor = Colors.fertilityGreen + '10';
-            borderColor = Colors.fertilityGreen;
-            borderWidth = 1;
-            textColor = Colors.fertilityGreen;
-            dotColor = Colors.fertilityGreen;
-            break;
-          case CyclePhase.LUTEAL:
-            backgroundColor = Colors.pmsLavender + '10';
-            borderColor = Colors.pmsLavender;
-            borderWidth = 1;
-            textColor = Colors.pmsLavender;
-            dotColor = Colors.pmsLavender;
-            break;
-          default:
-            backgroundColor = 'transparent';
-            textColor = Colors.textMedium;
-            dotColor = Colors.primary;
-        }
-        
-        if (backgroundColor !== 'transparent') {
-          customStyles = {
-            container: {
-              ...baseStyles.container,
-              backgroundColor,
-              borderColor,
-              borderWidth,
-            },
-            text: {
-              ...baseStyles.text,
-              color: textColor,
-              fontWeight: '500',
-            }
-          };
+          borderWidth = data.isStart || data.isEnd ? 4 : 3; // Extra thick for start/end
+          backgroundColor = 'transparent'; // Keep background transparent
+          textColor = Colors.textDark; // Use dark text for visibility
         }
       }
-      
-      // Handle today's date special styling
-      const isToday = date === today;
-      if (isToday && !isSelected) {
-        if (customStyles.container) {
-          customStyles.container = {
-            ...customStyles.container,
-            borderWidth: Math.max(borderWidth, 2),
-            borderColor: borderColor || Colors.primary,
+      // Priority 2: Ovulation days
+      else if (data.isOvulation) {
+        if (data.isPredicted) {
+          // Predicted ovulation - dashed orange border
+          borderColor = Colors.ovulationOrange;
+          borderWidth = 2;
+          borderStyle = 'dashed';
+          backgroundColor = 'transparent';
+          textColor = Colors.textDark;
+        } else {
+          // Actual ovulation - solid orange border
+          borderColor = Colors.ovulationOrange;
+          borderWidth = 3;
+          backgroundColor = 'transparent';
+          textColor = Colors.textDark;
+        }
+      }
+      // Priority 3: High pregnancy risk
+      else if (data.pregnancyRisk === 'high') {
+        borderColor = Colors.error;
+        borderWidth = 2;
+        backgroundColor = 'transparent';
+        textColor = Colors.textDark;
+      }
+      // Priority 4: Medium pregnancy risk
+      else if (data.pregnancyRisk === 'medium') {
+        borderColor = Colors.warning;
+        borderWidth = 2;
+        backgroundColor = 'transparent';
+        textColor = Colors.textDark;
+      }
+      // Priority 5: Other cycle phases
+      else {
+        switch (data.phase) {
+          case CyclePhase.FOLLICULAR:
+            borderColor = Colors.fertilityGreen;
+            borderWidth = 1;
+            backgroundColor = 'transparent';
+            textColor = Colors.textDark;
+            break;
+          case CyclePhase.LUTEAL:
+            borderColor = Colors.pmsLavender;
+            borderWidth = 1;
+            backgroundColor = 'transparent';
+            textColor = Colors.textDark;
+            break;
+        }
+      }
+
+      // Apply styling if we have markers
+      if (borderWidth > 0) {
+        customStyles = {
+          container: {
+            ...baseContainerStyle,
+            borderColor,
+            borderWidth,
+            borderStyle,
+            backgroundColor,
+          },
+          text: {
+            ...baseTextStyle,
+            color: textColor,
+            fontWeight: borderWidth >= 3 ? 'bold' : borderWidth >= 2 ? '600' : '500',
+          }
+        };
+      }
+
+      // Handle today's date (add subtle glow effect)
+      if (isToday && customStyles.container) {
+        customStyles.container = {
+          ...customStyles.container,
+          shadowColor: customStyles.container.borderColor || Colors.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+          elevation: 3,
+        };
+      } else if (isToday && !customStyles.container) {
+        // Today but no other markers
+        customStyles = {
+          container: {
+            ...baseContainerStyle,
+            borderColor: Colors.primary,
+            borderWidth: 2,
+            backgroundColor: Colors.primary + '08',
             shadowColor: Colors.primary,
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.3,
             shadowRadius: 4,
             elevation: 3,
-          };
-        } else {
-          customStyles = {
-            container: {
-              ...baseStyles.container,
-              backgroundColor: Colors.primary + '15',
-              borderColor: Colors.primary,
-              borderWidth: 2,
-              shadowColor: Colors.primary,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
-            },
-            text: {
-              ...baseStyles.text,
-              color: Colors.primary,
-              fontWeight: 'bold',
-            }
-          };
-        }
+          },
+          text: {
+            ...baseTextStyle,
+            color: Colors.primary,
+            fontWeight: '600',
+          }
+        };
       }
-      
-      // Handle selected date override (highest priority)
-      if (isSelected) {
-        if (customStyles.container) {
-          customStyles.container = {
-            ...customStyles.container,
-            borderWidth: Math.max(borderWidth, 3),
-            borderColor: borderColor || Colors.primary,
-            transform: [{ scale: 1.1 }],
-            shadowColor: borderColor || Colors.primary,
-            shadowOffset: { width: 0, height: 3 },
+
+      // Handle selected date (highest priority - scale and stronger border)
+      if (isSelected && customStyles.container) {
+        customStyles.container = {
+          ...customStyles.container,
+          borderWidth: Math.max(customStyles.container.borderWidth || 0, 3),
+          transform: [{ scale: 1.15 }],
+          shadowColor: customStyles.container.borderColor || Colors.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 8,
+          elevation: 6,
+        };
+        customStyles.text = {
+          ...customStyles.text,
+          fontWeight: 'bold',
+        };
+      } else if (isSelected && !customStyles.container) {
+        // Selected but no other markers
+        customStyles = {
+          container: {
+            ...baseContainerStyle,
+            borderColor: Colors.primary,
+            borderWidth: 3,
+            backgroundColor: Colors.primary + '12',
+            transform: [{ scale: 1.15 }],
+            shadowColor: Colors.primary,
+            shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.4,
-            shadowRadius: 6,
-            elevation: 5,
-          };
-        } else {
-          customStyles = {
-            container: {
-              ...baseStyles.container,
-              backgroundColor: Colors.primary + '20',
-              borderColor: Colors.primary,
-              borderWidth: 3,
-              transform: [{ scale: 1.1 }],
-              shadowColor: Colors.primary,
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.4,
-              shadowRadius: 6,
-              elevation: 5,
-            },
-            text: {
-              ...baseStyles.text,
-              color: Colors.primary,
-              fontWeight: 'bold',
-            }
-          };
-        }
+            shadowRadius: 8,
+            elevation: 6,
+          },
+          text: {
+            ...baseTextStyle,
+            color: Colors.primary,
+            fontWeight: 'bold',
+          }
+        };
       }
       
       marked[date] = {
-        marked: true,
-        dotColor,
+        marked: borderWidth > 0,
+        dotColor, // Keep as transparent
         selectedColor: isSelected ? (borderColor || Colors.primary) : undefined,
         selected: isSelected,
-        customStyles,
+        customStyles: Object.keys(customStyles).length > 0 ? customStyles : undefined,
       };
     });
     
@@ -362,7 +452,7 @@ export default function CalendarScreen() {
   };
 
   const getSelectedDateInfo = () => {
-    const data = mockCycleData[selectedDate];
+    const data = cycleData[selectedDate];
     
     // Calculate cycle day for selected date
     const today = new Date();
@@ -437,35 +527,21 @@ export default function CalendarScreen() {
     textDayFontSize: 16,
     textMonthFontSize: 20,
     textDayHeaderFontSize: 12,
-    // Enhanced spacing and padding consistency
-    'stylesheet.calendar.header': {
-      dayHeader: {
-        marginTop: Theme.spacing.sm,
-        marginBottom: Theme.spacing.sm,
-        width: 32,
-        textAlign: 'center',
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textMedium,
-      }
-    },
-    'stylesheet.day.basic': {
-      base: {
-        width: 32,
-        height: 32,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginVertical: Theme.spacing.xs,
-      },
-      text: {
-        marginTop: Platform.OS === 'android' ? 2 : 0,
-        fontSize: 16,
-        fontFamily: 'System',
-        fontWeight: '500',
-        color: colors.text,
-      }
-    }
   };
+
+  // Show loading state while data loads
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
+            Loading your cycle calendar...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -482,7 +558,7 @@ export default function CalendarScreen() {
         <Card style={styles.calendarCard}>
           <Calendar
             current={selectedDate}
-            onDayPress={(day) => setSelectedDate(day.dateString)}
+            onDayPress={handleDatePress}
             markedDates={getMarkedDates()}
             theme={calendarTheme}
             firstDay={0}
@@ -525,7 +601,7 @@ export default function CalendarScreen() {
             )}
 
             {/* Pregnancy Risk Indicator */}
-            {mockCycleData[selectedDate]?.pregnancyRisk && (
+            {cycleData[selectedDate]?.pregnancyRisk && (
               <View style={styles.riskInfo}>
                 <Text style={[styles.flowLabel, { color: Colors.textMedium }]}>
                   Pregnancy Risk:
@@ -533,32 +609,32 @@ export default function CalendarScreen() {
                 <View style={[
                   styles.riskBadge, 
                   { 
-                    backgroundColor: mockCycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error + '20' :
-                                   mockCycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning + '20' : 
+                    backgroundColor: cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error + '20' :
+                                   cycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning + '20' : 
                                    Colors.success + '20',
-                    borderColor: mockCycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
-                               mockCycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning : 
+                    borderColor: cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
+                               cycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning : 
                                Colors.success
                   }
                 ]}>
                   <Text style={[
                     styles.riskText,
                     { 
-                      color: mockCycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
-                             mockCycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning : 
+                      color: cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
+                             cycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning : 
                              Colors.success
                     }
                   ]}>
-                    {mockCycleData[selectedDate]?.pregnancyRisk?.toUpperCase()} 
-                    {mockCycleData[selectedDate]?.pregnancyRisk === 'high' ? ' 🚨' : 
-                     mockCycleData[selectedDate]?.pregnancyRisk === 'medium' ? ' ⚠️' : ' ✅'}
+                    {cycleData[selectedDate]?.pregnancyRisk?.toUpperCase()} 
+                    {cycleData[selectedDate]?.pregnancyRisk === 'high' ? ' 🚨' : 
+                     cycleData[selectedDate]?.pregnancyRisk === 'medium' ? ' ⚠️' : ' ✅'}
                   </Text>
                 </View>
               </View>
             )}
 
             {/* Predicted Date Notice */}
-            {mockCycleData[selectedDate]?.isPredicted && (
+            {cycleData[selectedDate]?.isPredicted && (
               <View style={styles.predictedInfo}>
                 <Text style={[styles.predictedLabel, { color: Colors.primary }]}>
                   📊 This is a predicted date - you can adjust if your period comes early or late
@@ -567,10 +643,28 @@ export default function CalendarScreen() {
             )}
 
             {/* Ovulation Day Notice */}
-            {mockCycleData[selectedDate]?.isOvulation && (
+            {cycleData[selectedDate]?.isOvulation && (
               <View style={styles.ovulationInfo}>
                 <Text style={[styles.ovulationLabel, { color: Colors.ovulationOrange }]}>
                   🥚 Peak fertility day - highest chance of conception
+                </Text>
+              </View>
+            )}
+
+            {/* Period Start Notice */}
+            {cycleData[selectedDate]?.isStart && !cycleData[selectedDate]?.isPredicted && (
+              <View style={styles.periodStartInfo}>
+                <Text style={[styles.periodStartLabel, { color: Colors.calendarRed }]}>
+                  🩸 Period start date - logged by you
+                </Text>
+              </View>
+            )}
+
+            {/* Add Period Start Button for unmarked dates */}
+            {!cycleData[selectedDate] && (
+              <View style={styles.addPeriodInfo}>
+                <Text style={[styles.addPeriodLabel, { color: Colors.textMedium }]}>
+                  💭 Tap &ldquo;Edit This Date&rdquo; to log your period start
                 </Text>
               </View>
             )}
@@ -603,92 +697,81 @@ export default function CalendarScreen() {
           />
         )}
 
-        {/* Enhanced Visual Legend */}
+        {/* Enhanced Visual Legend with Border-Based System */}
         <Card style={styles.legendCard}>
           <Text style={[styles.legendTitle, { color: colors.text }]}>
-            🎨 Visual Guide
+            📋 Calendar Legend
           </Text>
           <Text style={[styles.legendSubtitle, { color: Colors.textMedium }]}>
-            Each date is visually marked with colors and borders to show your cycle information
+            Date numbers are always visible. Borders and background colors show cycle information.
           </Text>
           
           <View style={styles.legendSection}>
-            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>Period Days</Text>
+            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>🩸 Period Tracking</Text>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.calendarRed,
-                  borderWidth: 2,
+                  backgroundColor: Colors.calendarRed + '15',
+                  borderWidth: 3,
                   borderColor: Colors.calendarRed,
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Active Period</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>Logged Period</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.calendarRed + '15',
+                  backgroundColor: Colors.calendarRed + '08',
                   borderWidth: 2,
                   borderColor: Colors.calendarRed,
                   borderStyle: 'dashed',
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Predicted Period</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>Expected Period</Text>
+              </View>
+            </View>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { 
+                  backgroundColor: Colors.calendarRed + '25',
+                  borderWidth: 4,
+                  borderColor: Colors.calendarRed,
+                }]} />
+                <Text style={[styles.legendText, { color: colors.text }]}>Period Start/End</Text>
               </View>
             </View>
           </View>
 
           <View style={styles.legendSection}>
-            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>Fertility & Ovulation</Text>
+            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>🥚 Fertility & Ovulation</Text>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.ovulationOrange + '25',
-                  borderWidth: 2,
+                  backgroundColor: Colors.ovulationOrange + '15',
+                  borderWidth: 3,
                   borderColor: Colors.ovulationOrange,
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Ovulation Day</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>Logged Ovulation</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.fertilityGreen + '10',
+                  backgroundColor: Colors.ovulationOrange + '08',
+                  borderWidth: 2,
+                  borderColor: Colors.ovulationOrange,
+                  borderStyle: 'dashed',
+                }]} />
+                <Text style={[styles.legendText, { color: colors.text }]}>Predicted Ovulation</Text>
+              </View>
+            </View>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { 
+                  backgroundColor: Colors.fertilityGreen + '05',
                   borderWidth: 1,
                   borderColor: Colors.fertilityGreen,
                 }]} />
                 <Text style={[styles.legendText, { color: colors.text }]}>Fertile Window</Text>
               </View>
-            </View>
-          </View>
-
-          <View style={styles.legendSection}>
-            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>Pregnancy Risk Levels</Text>
-            <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.error + '20',
-                  borderWidth: 2,
-                  borderColor: Colors.error,
-                }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>High Risk 🚨</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.warning + '15',
-                  borderWidth: 1.5,
-                  borderColor: Colors.warning,
-                }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Medium Risk ⚠️</Text>
-              </View>
-            </View>
-            <View style={styles.legendRow}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.success + '10',
-                  borderWidth: 1,
-                  borderColor: Colors.success,
-                }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Low Risk ✅</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.pmsLavender + '10',
+                  backgroundColor: Colors.pmsLavender + '05',
                   borderWidth: 1,
                   borderColor: Colors.pmsLavender,
                 }]} />
@@ -698,31 +781,68 @@ export default function CalendarScreen() {
           </View>
 
           <View style={styles.legendSection}>
-            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>Special Indicators</Text>
+            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>⚠️ Pregnancy Risk</Text>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.primary + '15',
+                  backgroundColor: Colors.error + '08',
+                  borderWidth: 2,
+                  borderColor: Colors.error,
+                }]} />
+                <Text style={[styles.legendText, { color: colors.text }]}>High Risk 🚨</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { 
+                  backgroundColor: Colors.warning + '08',
+                  borderWidth: 2,
+                  borderColor: Colors.warning,
+                }]} />
+                <Text style={[styles.legendText, { color: colors.text }]}>Medium Risk ⚠️</Text>
+              </View>
+            </View>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { 
+                  backgroundColor: 'transparent',
+                  borderWidth: 0,
+                }]} />
+                <Text style={[styles.legendText, { color: colors.text }]}>Safe Days ✅</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.legendSection}>
+            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>📍 Special Markers</Text>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { 
+                  backgroundColor: Colors.primary + '08',
                   borderWidth: 2,
                   borderColor: Colors.primary,
                   shadowColor: Colors.primary,
-                  shadowOffset: { width: 0, height: 2 },
+                  shadowOffset: { width: 0, height: 1 },
                   shadowOpacity: 0.3,
-                  shadowRadius: 4,
-                  elevation: 3,
+                  shadowRadius: 2,
+                  elevation: 2,
                 }]} />
                 <Text style={[styles.legendText, { color: colors.text }]}>Today</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.primary + '20',
+                  backgroundColor: Colors.primary + '12',
                   borderWidth: 3,
                   borderColor: Colors.primary,
-                  transform: [{ scale: 0.9 }], // Scaled down for legend
+                  transform: [{ scale: 0.85 }], // Scaled for legend
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Selected</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>Selected Date</Text>
               </View>
             </View>
+          </View>
+
+          <View style={styles.noteSection}>
+            <Text style={[styles.noteText, { color: Colors.textMedium }]}>
+              💡 Tip: Thicker borders indicate period start/end dates. Dashed borders show predictions.
+            </Text>
           </View>
         </Card>
 
@@ -748,6 +868,22 @@ export default function CalendarScreen() {
           }}
         />
       </Modal>
+
+      {/* Day Detail Modal */}
+      <DayDetailModal
+        isVisible={showDayDetailModal}
+        onClose={() => setShowDayDetailModal(false)}
+        selectedDate={selectedDate}
+        cycleData={cycleData[selectedDate]}
+        onDateUpdated={async () => {
+          await loadUserCycleData();
+          setShowDayDetailModal(false);
+        }}
+        onEditEntry={() => {
+          setShowDayDetailModal(false);
+          setShowDataEntryScreen(true);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -951,7 +1087,56 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginRight: Theme.spacing.sm,
   },
+  noteSection: {
+    marginTop: Theme.spacing.md,
+    paddingTop: Theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  noteText: {
+    fontSize: Theme.typography.sizes.xs,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  periodStartInfo: {
+    backgroundColor: Colors.calendarRed + '10',
+    padding: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.calendarRed,
+    marginBottom: Theme.spacing.sm,
+  },
+  periodStartLabel: {
+    fontSize: Theme.typography.sizes.sm,
+    fontWeight: Theme.typography.weights.medium,
+    lineHeight: 18,
+  },
+  addPeriodInfo: {
+    backgroundColor: Colors.textLight + '10',
+    padding: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.textLight,
+    marginBottom: Theme.spacing.sm,
+  },
+  addPeriodLabel: {
+    fontSize: Theme.typography.sizes.sm,
+    fontWeight: Theme.typography.weights.medium,
+    lineHeight: 18,
+  },
   bottomPadding: {
     height: 100,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Theme.spacing.xxl,
+  },
+  loadingText: {
+    fontSize: Theme.typography.sizes.md,
+    marginTop: Theme.spacing.md,
+    textAlign: 'center',
   },
 });

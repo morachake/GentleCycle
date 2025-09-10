@@ -25,16 +25,22 @@ export default function TabLayout() {
             position: 'absolute',
             backgroundColor: Colors.cardWhite,
             borderTopWidth: 0,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
             ...Theme.shadows.sm,
-            paddingBottom: 25,
-            height: 85,
+            paddingBottom: 20,
+            paddingTop: 8,
+            height: 80,
           },
           default: {
             backgroundColor: Colors.cardWhite,
             borderTopWidth: 0,
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
             ...Theme.shadows.sm,
-            paddingBottom: 10,
-            height: 65,
+            paddingBottom: 8,
+            paddingTop: 6,
+            height: 60,
           },
         }),
         tabBarLabelStyle: {
@@ -47,42 +53,42 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
           title: 'Calendar',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="calendar" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="calendar" color={color} />,
         }}
       />
       <Tabs.Screen
         name="symptoms"
         options={{
           title: 'Symptoms',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="heart.text.square.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="heart.text.square.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="insights"
         options={{
           title: 'Insights',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="brain.head.profile" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="brain.head.profile" color={color} />,
         }}
       />
       <Tabs.Screen
         name="analytics"
         options={{
           title: 'Analytics',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="chart.line.uptrend.xyaxis" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="chart.line.uptrend.xyaxis" color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.crop.circle" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="person.crop.circle" color={color} />,
         }}
       />
     </Tabs>

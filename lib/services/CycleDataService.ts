@@ -113,6 +113,20 @@ class CycleDataService {
    * Log period start
    */
   async logPeriodStart(date: string, flow?: FlowIntensity): Promise<string> {
+    // Check if a period already exists for this date
+    const existingPeriods = await this.getAllPeriods();
+    const existingPeriod = existingPeriods.find(period => period.startDate === date);
+    
+    if (existingPeriod) {
+      // If period exists, just update the flow if provided
+      if (flow) {
+        await database.addPeriodDay(existingPeriod.id, date, flow);
+      }
+      console.log(`Period already exists for ${date}, using existing period ID: ${existingPeriod.id}`);
+      return existingPeriod.id;
+    }
+    
+    // Create new period if none exists
     const periodId = this.generateId();
     const cycleId = await this.getOrCreateCurrentCycle(date);
     
@@ -128,6 +142,7 @@ class CycleDataService {
       await database.addPeriodDay(periodId, date, flow);
     }
 
+    console.log(`New period created for ${date} with ID: ${periodId}`);
     return periodId;
   }
 
@@ -169,8 +184,7 @@ class CycleDataService {
    * Get all periods
    */
   async getAllPeriods(): Promise<Period[]> {
-    // Need to implement in database
-    return [];
+    return await database.getAllPeriods();
   }
 
   /**
@@ -258,8 +272,7 @@ class CycleDataService {
    * Delete symptoms for a date
    */
   async deleteSymptomsForDate(date: string): Promise<void> {
-    // Implementation needed in database
-    console.log(`Deleting symptoms for date: ${date}`);
+    await database.deleteSymptomsByDate(date);
   }
 
   // DAILY ENTRY CRUD OPERATIONS
@@ -287,7 +300,7 @@ class CycleDataService {
         weight: data.weight || existingEntry.weight,
         notes: data.notes || existingEntry.notes,
       };
-      await database.createDailyEntry(updatedEntry);
+      await database.updateDailyEntry(updatedEntry);
     } else {
       // Create new entry
       const dailyEntry: Omit<DailyEntry, 'createdAt' | 'updatedAt' | 'symptoms'> = {
@@ -302,8 +315,12 @@ class CycleDataService {
     }
 
     // Update symptoms separately
+    console.log('Symptoms to save:', data.symptoms);
     if (data.symptoms.length > 0) {
+      console.log(`Saving ${data.symptoms.length} symptoms for date ${data.date}`);
       await this.updateSymptoms(data.date, data.symptoms);
+    } else {
+      console.log('No symptoms to save for date:', data.date);
     }
   }
 
@@ -320,6 +337,28 @@ class CycleDataService {
   async deleteDailyEntry(date: string): Promise<void> {
     // Implementation needed in database
     console.log(`Deleting daily entry for: ${date}`);
+  }
+
+  /**
+   * Get flow intensity for a specific date
+   */
+  async getFlowForDate(date: string): Promise<FlowIntensity> {
+    const periods = await this.getAllPeriods();
+    
+    for (const period of periods) {
+      const periodStartDate = new Date(period.startDate);
+      const periodEndDate = period.endDate ? new Date(period.endDate) : new Date();
+      const targetDate = new Date(date);
+      
+      if (targetDate >= periodStartDate && targetDate <= periodEndDate) {
+        const periodDay = period.days.find(day => day.date === date);
+        if (periodDay) {
+          return periodDay.flow;
+        }
+      }
+    }
+    
+    return FlowIntensity.NONE;
   }
 
   // PREDICTION ALGORITHMS
@@ -406,8 +445,6 @@ class CycleDataService {
    */
   async getCurrentCyclePhase(date: string): Promise<CyclePhase> {
     const periods = await this.getAllPeriods();
-    const predictions = await this.calculatePredictions();
-    
     const currentDate = new Date(date);
     
     // Check if currently in period
@@ -421,16 +458,41 @@ class CycleDataService {
       return CyclePhase.MENSTRUAL;
     }
     
-    // Check cycle phase based on predictions
-    const ovulationDate = new Date(predictions.nextOvulationDate);
-    const daysFromOvulation = Math.floor((currentDate.getTime() - ovulationDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (Math.abs(daysFromOvulation) <= 2) {
-      return CyclePhase.OVULATION;
-    } else if (daysFromOvulation < -2) {
+    // If no periods, default to follicular
+    if (periods.length === 0) {
       return CyclePhase.FOLLICULAR;
-    } else {
-      return CyclePhase.LUTEAL;
+    }
+    
+    try {
+      // Try to use predictions for phase calculation
+      const predictions = await this.calculatePredictions();
+      const ovulationDate = new Date(predictions.nextOvulationDate);
+      const daysFromOvulation = Math.floor((currentDate.getTime() - ovulationDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (Math.abs(daysFromOvulation) <= 2) {
+        return CyclePhase.OVULATION;
+      } else if (daysFromOvulation < -2) {
+        return CyclePhase.FOLLICULAR;
+      } else {
+        return CyclePhase.LUTEAL;
+      }
+    } catch (error) {
+      // Fallback: calculate phase based on cycle day from most recent period
+      const recentPeriods = periods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+      const lastPeriod = recentPeriods[0];
+      const lastPeriodDate = new Date(lastPeriod.startDate);
+      const daysSinceLastPeriod = Math.floor((currentDate.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Simple phase calculation based on typical 28-day cycle
+      if (daysSinceLastPeriod <= 5) {
+        return CyclePhase.MENSTRUAL;
+      } else if (daysSinceLastPeriod <= 13) {
+        return CyclePhase.FOLLICULAR;
+      } else if (daysSinceLastPeriod <= 16) {
+        return CyclePhase.OVULATION;
+      } else {
+        return CyclePhase.LUTEAL;
+      }
     }
   }
 
@@ -485,8 +547,14 @@ class CycleDataService {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(date)) return false;
     
-    const parsedDate = new Date(date);
-    return parsedDate instanceof Date && !isNaN(parsedDate.getTime());
+    const parsedDate = new Date(date + 'T00:00:00.000Z');
+    if (!parsedDate || isNaN(parsedDate.getTime())) return false;
+    
+    // Check if the date components match the input (to catch invalid dates like 2024-02-30)
+    const [year, month, day] = date.split('-').map(Number);
+    return parsedDate.getUTCFullYear() === year &&
+           parsedDate.getUTCMonth() === month - 1 &&
+           parsedDate.getUTCDate() === day;
   }
 
   /**
@@ -529,6 +597,213 @@ class CycleDataService {
       regularityScore: Math.round(regularityScore * 100),
       mostCommonSymptoms: [], // TODO: Implement symptom frequency analysis
     };
+  }
+
+  /**
+   * Get symptom frequency analysis
+   */
+  async getSymptomAnalytics(): Promise<{
+    name: string;
+    population: number;
+    color: string;
+    legendFontColor: string;
+  }[]> {
+    const symptoms = await database.getAllSymptoms();
+    const symptomCounts: Record<string, number> = {};
+    
+    symptoms.forEach(symptom => {
+      symptomCounts[symptom.type] = (symptomCounts[symptom.type] || 0) + 1;
+    });
+    
+    const colors = ['#F44336', '#FF9800', '#9C27B0', '#2196F3', '#4CAF50', '#607D8B'];
+    
+    return Object.entries(symptomCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5)
+      .map(([type, count], index) => ({
+        name: type,
+        population: count,
+        color: colors[index] || '#607D8B',
+        legendFontColor: '#212121',
+      }));
+  }
+
+  /**
+   * Get mood trend data for chart
+   */
+  async getMoodTrendData(): Promise<{
+    labels: string[];
+    datasets: { data: number[]; color: () => string; strokeWidth: number; }[];
+  }> {
+    const dailyEntries = await database.getAllDailyEntries();
+    const now = new Date();
+    const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+    
+    // Filter entries to last 4 weeks and group by week
+    const recentEntries = dailyEntries.filter(entry => 
+      new Date(entry.date) >= fourWeeksAgo
+    ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    const weeklyAverages = [0, 0, 0, 0]; // 4 weeks
+    const weeklyCounts = [0, 0, 0, 0];
+    
+    recentEntries.forEach(entry => {
+      if (entry.mood && entry.energyLevel) {
+        const daysDiff = Math.floor((new Date(entry.date).getTime() - fourWeeksAgo.getTime()) / (24 * 60 * 60 * 1000));
+        const weekIndex = Math.min(Math.floor(daysDiff / 7), 3);
+        
+        // Convert mood to numeric (assuming enum values)
+        const moodScore = entry.energyLevel; // Using energy level as mood proxy
+        weeklyAverages[weekIndex] += moodScore;
+        weeklyCounts[weekIndex]++;
+      }
+    });
+    
+    const averages = weeklyAverages.map((sum, index) => 
+      weeklyCounts[index] > 0 ? Math.round(sum / weeklyCounts[index]) : 3
+    );
+    
+    return {
+      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+      datasets: [{
+        data: averages,
+        color: () => '#E91E63',
+        strokeWidth: 2,
+      }],
+    };
+  }
+
+  /**
+   * Get cycle length trend data for the last 6 months
+   */
+  async getCycleLengthTrendData(): Promise<{
+    labels: string[];
+    datasets: { data: number[]; color: () => string; strokeWidth: number; }[];
+  }> {
+    const cycles = await this.getAllCycles();
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    
+    // Filter to last 6 months and sort by start date
+    const recentCycles = cycles
+      .filter(cycle => new Date(cycle.startDate) >= sixMonthsAgo)
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+    
+    // Group by month
+    const monthlyData: { [key: string]: number[] } = {};
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    recentCycles.forEach(cycle => {
+      if (cycle.cycleLength) {
+        const date = new Date(cycle.startDate);
+        const monthKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        if (!monthlyData[monthKey]) monthlyData[monthKey] = [];
+        monthlyData[monthKey].push(cycle.cycleLength);
+      }
+    });
+    
+    // Get last 6 months' averages
+    const labels: string[] = [];
+    const data: number[] = [];
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+      const shortMonth = monthNames[date.getMonth()];
+      
+      labels.push(shortMonth);
+      
+      const monthCycles = monthlyData[monthKey] || [];
+      const average = monthCycles.length > 0 
+        ? monthCycles.reduce((sum, length) => sum + length, 0) / monthCycles.length
+        : 28; // Default
+      
+      data.push(Math.round(average));
+    }
+    
+    return {
+      labels,
+      datasets: [{
+        data,
+        color: () => '#E91E63',
+        strokeWidth: 3,
+      }],
+    };
+  }
+
+  /**
+   * Get personalized insights based on user data
+   */
+  async getPersonalizedInsights(): Promise<{
+    title: string;
+    value: string;
+    description: string;
+    color: string;
+  }[]> {
+    const stats = await this.getCycleStatistics();
+    const symptoms = await this.getSymptomAnalytics();
+    const moodData = await this.getMoodTrendData();
+    
+    const insights = [];
+    
+    // Cycle regularity insight
+    let regularityDescription = 'Your cycles vary significantly';
+    let regularityColor = '#F44336'; // Red
+    if (stats.regularityScore >= 90) {
+      regularityDescription = 'Your cycles are very consistent';
+      regularityColor = '#4CAF50'; // Green
+    } else if (stats.regularityScore >= 70) {
+      regularityDescription = 'Your cycles are fairly regular';
+      regularityColor = '#FF9800'; // Orange
+    }
+    
+    insights.push({
+      title: 'Cycle Regularity',
+      value: `${stats.regularityScore}%`,
+      description: regularityDescription,
+      color: regularityColor,
+    });
+    
+    // Most common symptom
+    if (symptoms.length > 0) {
+      const topSymptom = symptoms[0];
+      insights.push({
+        title: 'Most Common Symptom',
+        value: topSymptom.name,
+        description: `Logged ${topSymptom.population} times recently`,
+        color: '#F44336',
+      });
+    }
+    
+    // Average mood/energy
+    const avgMood = moodData.datasets[0].data.reduce((sum, val) => sum + val, 0) / moodData.datasets[0].data.length;
+    let moodDescription = 'Consider tracking your wellness';
+    let moodColor = '#2196F3';
+    
+    if (avgMood >= 4) {
+      moodDescription = 'You\'re feeling great this month!';
+      moodColor = '#4CAF50';
+    } else if (avgMood >= 3) {
+      moodDescription = 'Your energy levels are steady';
+      moodColor = '#FF9800';
+    }
+    
+    insights.push({
+      title: 'Energy Levels',
+      value: `${avgMood.toFixed(1)}/5`,
+      description: moodDescription,
+      color: moodColor,
+    });
+    
+    // Total cycles tracked
+    insights.push({
+      title: 'Tracking Progress',
+      value: `${stats.totalCycles} cycles`,
+      description: `Great job tracking your health!`,
+      color: '#9C27B0',
+    });
+    
+    return insights;
   }
 
   // DATA MANAGEMENT OPERATIONS
@@ -605,4 +880,5 @@ class CycleDataService {
   }
 }
 
+export { CycleDataService };
 export const cycleDataService = CycleDataService.getInstance();

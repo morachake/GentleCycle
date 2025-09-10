@@ -68,7 +68,7 @@ export const FlowSelector: React.FC<FlowSelectorProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: Theme.spacing.md,
+    marginVertical: Theme.spacing.sm,
   },
   title: {
     fontSize: Theme.typography.sizes.md,
@@ -77,25 +77,26 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Theme.spacing.sm,
+    justifyContent: 'space-between',
+    gap: Theme.spacing.xs,
   },
   option: {
     flex: 1,
-    minWidth: 80,
-    aspectRatio: 1,
-    borderRadius: Theme.borderRadius.md,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.xs,
+    borderRadius: Theme.borderRadius.sm,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Theme.spacing.sm,
+    minHeight: 65,
   },
   emoji: {
-    fontSize: 24,
-    marginBottom: Theme.spacing.xs,
+    fontSize: 20,
+    marginBottom: 2,
   },
   label: {
-    fontSize: Theme.typography.sizes.xs,
+    fontSize: 11,
     textAlign: 'center',
+    lineHeight: 14,
   },
 });

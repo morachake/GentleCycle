@@ -8,6 +8,7 @@ import { Card, Button } from '@/components/ui';
 import { FlowSelector } from '@/components/period/FlowSelector';
 import { SymptomSelector } from '@/components/period/SymptomSelector';
 import { FlowIntensity, SymptomType, SymptomSeverity, MoodType } from '@/types';
+import { cycleDataService } from '@/lib/services/CycleDataService';
 
 interface MoodOption {
   type: MoodType;
@@ -37,23 +38,54 @@ export default function SymptomsScreen() {
   const [energyLevel, setEnergyLevel] = useState<number>(3);
   const [notes, setNotes] = useState<string>('');
 
-  const handleSaveEntry = () => {
-    const entry = {
-      date: new Date().toISOString().split('T')[0],
-      flow: selectedFlow,
-      symptoms: selectedSymptoms,
-      mood: selectedMood,
-      energyLevel,
-      notes,
-    };
-    
-    console.log('Saving entry:', entry);
-    
-    Alert.alert(
-      'Entry Saved',
-      'Your daily entry has been saved successfully!',
-      [{ text: 'OK' }]
-    );
+  const handleSaveEntry = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Save daily entry (mood, energy, notes)
+      await cycleDataService.saveDailyEntry({
+        date: today,
+        mood: selectedMood,
+        energyLevel,
+        notes,
+        symptoms: selectedSymptoms.map(symptom => ({
+          type: symptom.type,
+          severity: symptom.severity,
+          notes: undefined // No individual symptom notes for now
+        })),
+      });
+      
+      // If user selected a flow, also log period data
+      if (selectedFlow !== FlowIntensity.NONE) {
+        await cycleDataService.logPeriodStart(today, selectedFlow);
+      }
+      
+      console.log('Data saved successfully for date:', today);
+      console.log('Saved symptoms:', selectedSymptoms);
+      console.log('Saved mood:', selectedMood);
+      console.log('Saved energy level:', energyLevel);
+      
+      Alert.alert(
+        'Entry Saved! ✅',
+        'Your daily entry has been saved successfully!',
+        [{ text: 'Great!' }]
+      );
+      
+      // Reset form
+      setSelectedFlow(FlowIntensity.NONE);
+      setSelectedSymptoms([]);
+      setSelectedMood(null);
+      setEnergyLevel(3);
+      setNotes('');
+      
+    } catch (error) {
+      console.error('Error saving entry:', error);
+      Alert.alert(
+        'Save Failed',
+        'There was an error saving your entry. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const hasAnyData = () => {
@@ -80,7 +112,7 @@ export default function SymptomsScreen() {
         </View>
 
         {/* Flow Tracking */}
-        <Card style={styles.sectionCard}>
+        <Card style={styles.sectionCard} padding="sm">
           <FlowSelector
             selectedFlow={selectedFlow}
             onFlowSelect={setSelectedFlow}
@@ -88,7 +120,7 @@ export default function SymptomsScreen() {
         </Card>
 
         {/* Mood Tracking */}
-        <Card style={styles.sectionCard}>
+        <Card style={styles.sectionCard} padding="sm">
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             How are you feeling today?
           </Text>
@@ -126,7 +158,7 @@ export default function SymptomsScreen() {
         </Card>
 
         {/* Energy Level */}
-        <Card style={styles.sectionCard}>
+        <Card style={styles.sectionCard} padding="sm">
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Energy Level
           </Text>
@@ -160,7 +192,7 @@ export default function SymptomsScreen() {
         </Card>
 
         {/* Symptoms */}
-        <Card style={styles.sectionCard}>
+        <Card style={styles.sectionCard} padding="sm">
           <SymptomSelector
             selectedSymptoms={selectedSymptoms}
             onSymptomsChange={setSelectedSymptoms}
@@ -190,7 +222,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: Theme.spacing.md,
-    paddingBottom: 0,
+    paddingBottom: Theme.spacing.xs,
   },
   title: {
     fontSize: Theme.typography.sizes.xxl,
@@ -199,39 +231,41 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: Theme.typography.sizes.md,
-    marginBottom: Theme.spacing.lg,
+    marginBottom: Theme.spacing.sm,
   },
   sectionCard: {
     marginHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
   },
   sectionTitle: {
-    fontSize: Theme.typography.sizes.lg,
+    fontSize: Theme.typography.sizes.md,
     fontWeight: Theme.typography.weights.semibold,
-    marginBottom: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
   },
   moodGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Theme.spacing.sm,
+    gap: Theme.spacing.xs,
     justifyContent: 'space-between',
   },
   moodOption: {
     width: '23%',
-    aspectRatio: 1,
-    borderRadius: Theme.borderRadius.md,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.xs,
+    borderRadius: Theme.borderRadius.sm,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Theme.spacing.sm,
+    minHeight: 60,
   },
   moodEmoji: {
-    fontSize: 24,
-    marginBottom: Theme.spacing.xs,
+    fontSize: 18,
+    marginBottom: 2,
   },
   moodLabel: {
-    fontSize: Theme.typography.sizes.xs,
+    fontSize: 10,
     textAlign: 'center',
+    lineHeight: 12,
   },
   energyContainer: {
     alignItems: 'center',
