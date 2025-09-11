@@ -17,7 +17,9 @@ interface DayDetailModalProps {
     phase: CyclePhase;
     flow: FlowIntensity;
     isOvulation?: boolean;
-    pregnancyRisk?: 'high' | 'medium' | 'low';
+    pregnancyRisk?: 'high' | 'medium' | 'low' | 'very_high' | 'very_low';
+    pregnancyRiskData?: any;
+    cycleDay?: number;
     isPredicted?: boolean;
     isStart?: boolean;
     isEnd?: boolean;
@@ -73,33 +75,39 @@ export function DayDetailModal({
 
     const riskLevel = cycleData.pregnancyRisk || 'low';
     const riskColors = {
+      very_high: '#D32F2F',
       high: Colors.calendarRed,
       medium: Colors.warning,
-      low: Colors.success
+      low: Colors.success,
+      very_low: Colors.success
     };
 
     const riskEmojis = {
-      high: '🔴',
+      very_high: '🔴',
+      high: '🚨',
       medium: '🟡', 
-      low: '🟢'
+      low: '🟢',
+      very_low: '✅'
     };
 
     const riskDescriptions = {
-      high: 'High fertility window - peak chance of conception',
+      very_high: 'Peak fertility window - highest chance of conception',
+      high: 'High fertility window - increased chance of conception',
       medium: 'Moderate fertility - some chance of conception',
-      low: 'Low fertility window - minimal chance of conception'
+      low: 'Low fertility window - minimal chance of conception',
+      very_low: 'Very safe period - minimal to no chance of conception'
     };
 
     return (
-      <Card style={[styles.riskCard, { borderColor: riskColors[riskLevel] }]}>
+      <Card style={[styles.riskCard, { borderColor: riskColors[riskLevel as keyof typeof riskColors] || Colors.textMedium }]}>
         <View style={styles.riskHeader}>
-          <Text style={styles.riskEmoji}>{riskEmojis[riskLevel]}</Text>
-          <Text style={[styles.riskTitle, { color: riskColors[riskLevel] }]}>
-            {riskLevel.toUpperCase()} PREGNANCY RISK
+          <Text style={styles.riskEmoji}>{riskEmojis[riskLevel as keyof typeof riskEmojis] || '❓'}</Text>
+          <Text style={[styles.riskTitle, { color: riskColors[riskLevel as keyof typeof riskColors] || Colors.textMedium }]}>
+            {riskLevel.replace('_', ' ').toUpperCase()} PREGNANCY RISK
           </Text>
         </View>
         <Text style={[styles.riskDescription, { color: colors.text }]}>
-          {riskDescriptions[riskLevel]}
+          {riskDescriptions[riskLevel as keyof typeof riskDescriptions] || 'Unknown risk level'}
         </Text>
       </Card>
     );

@@ -25,6 +25,11 @@ interface MarkedDate {
     container?: any;
     text?: any;
   };
+  dots?: Array<{
+    key: string;
+    color: string;
+    selectedDotColor?: string;
+  }>;
 }
 
 export default function CalendarScreen() {
@@ -93,16 +98,22 @@ export default function CalendarScreen() {
     userPeriodDates.forEach((periodStart, index) => {
       const startDate = new Date(periodStart);
       
-      // Add actual period days
+      // Add actual period days with proper pregnancy risk calculation
       for (let i = 0; i < avgPeriodLength; i++) {
         const currentDate = new Date(startDate);
         currentDate.setDate(currentDate.getDate() + i);
         const dateString = currentDate.toISOString().split('T')[0];
+        const cycleDay = i + 1;
+        
+        // Calculate pregnancy risk using the actual calculator
+        const riskData = PregnancyRiskCalculator.calculateRisk(cycleDay, avgCycleLength, avgPeriodLength);
         
         cycleData[dateString] = {
           phase: CyclePhase.MENSTRUAL,
           flow: i === 0 ? FlowIntensity.HEAVY : i === 1 ? FlowIntensity.HEAVY : i === 2 ? FlowIntensity.MEDIUM : i === 3 ? FlowIntensity.LIGHT : FlowIntensity.SPOTTING,
-          pregnancyRisk: 'low',
+          pregnancyRisk: riskData.risk.toLowerCase() as 'high' | 'medium' | 'low' | 'very_high' | 'very_low',
+          pregnancyRiskData: riskData,
+          cycleDay,
           isStart: i === 0,
           isEnd: i === avgPeriodLength - 1,
         };
@@ -113,11 +124,17 @@ export default function CalendarScreen() {
         const currentDate = new Date(startDate);
         currentDate.setDate(currentDate.getDate() + i);
         const dateString = currentDate.toISOString().split('T')[0];
+        const cycleDay = i + 1;
+        
+        // Calculate pregnancy risk using the actual calculator
+        const riskData = PregnancyRiskCalculator.calculateRisk(cycleDay, avgCycleLength, avgPeriodLength);
         
         cycleData[dateString] = {
           phase: CyclePhase.FOLLICULAR,
           flow: FlowIntensity.NONE,
-          pregnancyRisk: i >= 10 ? 'medium' : 'low',
+          pregnancyRisk: riskData.risk.toLowerCase() as 'high' | 'medium' | 'low' | 'very_high' | 'very_low',
+          pregnancyRiskData: riskData,
+          cycleDay,
         };
       }
 
@@ -126,24 +143,26 @@ export default function CalendarScreen() {
       const fertileWindowStart = Math.max(ovulationDay - 5, avgPeriodLength);
       const fertileWindowEnd = Math.min(ovulationDay + 2, avgCycleLength - 1);
       
-      // Add fertile window with gradient risk levels
+      // Add fertile window with proper pregnancy risk calculation
       for (let i = fertileWindowStart; i <= fertileWindowEnd; i++) {
         const currentDate = new Date(startDate);
         currentDate.setDate(currentDate.getDate() + i);
         const dateString = currentDate.toISOString().split('T')[0];
+        const cycleDay = i + 1;
+        
+        // Calculate pregnancy risk using the actual calculator
+        const riskData = PregnancyRiskCalculator.calculateRisk(cycleDay, avgCycleLength, avgPeriodLength);
         
         // Peak ovulation day
         const isOvulationPeak = i === ovulationDay;
-        // High fertility days (2 days before and day of ovulation)
-        const isHighFertility = i >= ovulationDay - 2 && i <= ovulationDay;
-        // Medium fertility days (fertile window edges)
-        const isMediumFertility = !isHighFertility && i >= fertileWindowStart && i <= fertileWindowEnd;
         
         cycleData[dateString] = {
           phase: isOvulationPeak ? CyclePhase.OVULATION : CyclePhase.FOLLICULAR,
           flow: FlowIntensity.NONE,
           isOvulation: isOvulationPeak,
-          pregnancyRisk: isHighFertility ? 'high' : isMediumFertility ? 'medium' : 'low',
+          pregnancyRisk: riskData.risk.toLowerCase() as 'high' | 'medium' | 'low' | 'very_high' | 'very_low',
+          pregnancyRiskData: riskData,
+          cycleDay,
         };
       }
 
@@ -153,23 +172,17 @@ export default function CalendarScreen() {
         const currentDate = new Date(startDate);
         currentDate.setDate(currentDate.getDate() + i);
         const dateString = currentDate.toISOString().split('T')[0];
+        const cycleDay = i + 1;
         
-        // Early luteal phase has some pregnancy risk, late luteal is safer
-        const daysAfterOvulation = i - ovulationDay;
-        let riskLevel: 'high' | 'medium' | 'low' = 'low';
-        
-        if (daysAfterOvulation <= 1) {
-          riskLevel = 'high'; // Implantation window
-        } else if (daysAfterOvulation <= 3) {
-          riskLevel = 'medium'; // Early luteal
-        } else {
-          riskLevel = 'low'; // Late luteal/safe period
-        }
+        // Calculate pregnancy risk using the actual calculator
+        const riskData = PregnancyRiskCalculator.calculateRisk(cycleDay, avgCycleLength, avgPeriodLength);
         
         cycleData[dateString] = {
           phase: CyclePhase.LUTEAL,
           flow: FlowIntensity.NONE,
-          pregnancyRisk: riskLevel,
+          pregnancyRisk: riskData.risk.toLowerCase() as 'high' | 'medium' | 'low' | 'very_high' | 'very_low',
+          pregnancyRiskData: riskData,
+          cycleDay,
         };
       }
 
@@ -189,11 +202,17 @@ export default function CalendarScreen() {
             const currentDate = new Date(nextPeriodStart);
             currentDate.setDate(currentDate.getDate() + i);
             const dateString = currentDate.toISOString().split('T')[0];
+            const cycleDay = i + 1;
+            
+            // Calculate pregnancy risk using the actual calculator
+            const riskData = PregnancyRiskCalculator.calculateRisk(cycleDay, avgCycleLength, avgPeriodLength);
             
             cycleData[dateString] = {
               phase: CyclePhase.MENSTRUAL,
               flow: i === 0 ? FlowIntensity.MEDIUM : i === 1 ? FlowIntensity.HEAVY : i === 2 ? FlowIntensity.MEDIUM : i === 3 ? FlowIntensity.LIGHT : FlowIntensity.LIGHT,
-              pregnancyRisk: 'low',
+              pregnancyRisk: riskData.risk.toLowerCase() as 'high' | 'medium' | 'low' | 'very_high' | 'very_low',
+              pregnancyRiskData: riskData,
+              cycleDay,
               isPredicted: true,
               isStart: i === 0,
               isEnd: i === avgPeriodLength - 1,
@@ -210,18 +229,22 @@ export default function CalendarScreen() {
             const currentDate = new Date(nextPeriodStart);
             currentDate.setDate(currentDate.getDate() + i);
             const dateString = currentDate.toISOString().split('T')[0];
+            const cycleDay = i + 1;
             
             const isOvulationPeak = i === ovulationDayInCycle;
-            const isHighFertility = i >= ovulationDayInCycle - 2 && i <= ovulationDayInCycle;
-            const isMediumFertility = !isHighFertility && i >= fertileStart && i <= fertileEnd;
             
             // Don't overwrite period days
             if (!cycleData[dateString]) {
+              // Calculate pregnancy risk using the actual calculator
+              const riskData = PregnancyRiskCalculator.calculateRisk(cycleDay, avgCycleLength, avgPeriodLength);
+              
               cycleData[dateString] = {
                 phase: isOvulationPeak ? CyclePhase.OVULATION : CyclePhase.FOLLICULAR,
                 flow: FlowIntensity.NONE,
                 isOvulation: isOvulationPeak,
-                pregnancyRisk: isHighFertility ? 'high' : isMediumFertility ? 'medium' : 'low',
+                pregnancyRisk: riskData.risk.toLowerCase() as 'high' | 'medium' | 'low' | 'very_high' | 'very_low',
+                pregnancyRiskData: riskData,
+                cycleDay,
                 isPredicted: true,
               };
             }
@@ -245,28 +268,30 @@ export default function CalendarScreen() {
   const getMarkedDates = () => {
     const marked: { [key: string]: MarkedDate } = {};
     
-    // Enhanced cycle data with better visual indicators - keeping date numbers visible
+    // Enhanced cycle data with better visual indicators and risk labels
     Object.entries(cycleData).forEach(([date, data]) => {
       let dotColor = 'transparent'; // Remove dots, use borders instead
       let customStyles: any = {};
       let isSelected = date === selectedDate;
       let isToday = date === today;
       
-      // Base styling - always keep text visible
+      // Base styling - updated to accommodate risk labels
       const baseContainerStyle = {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'transparent', // Always transparent background
+        backgroundColor: 'transparent',
+        position: 'relative' as const,
       };
       
       const baseTextStyle = {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '500' as const,
         textAlign: 'center' as const,
-        color: Colors.textDark, // Default readable text
+        color: Colors.textDark,
+        lineHeight: 16,
       };
 
       // Determine border styling based on cycle data
@@ -310,17 +335,36 @@ export default function CalendarScreen() {
           textColor = Colors.textDark;
         }
       }
-      // Priority 3: High pregnancy risk
+      // Priority 3: Pregnancy risk levels (very high, high, medium, low, very low)
+      else if (data.pregnancyRisk === 'very_high') {
+        borderColor = '#D32F2F'; // Dark red for very high
+        borderWidth = 3;
+        backgroundColor = '#D32F2F15';
+        textColor = '#D32F2F';
+      }
       else if (data.pregnancyRisk === 'high') {
         borderColor = Colors.error;
         borderWidth = 2;
-        backgroundColor = 'transparent';
-        textColor = Colors.textDark;
+        backgroundColor = Colors.error + '10';
+        textColor = Colors.error;
       }
       // Priority 4: Medium pregnancy risk
       else if (data.pregnancyRisk === 'medium') {
         borderColor = Colors.warning;
         borderWidth = 2;
+        backgroundColor = Colors.warning + '10';
+        textColor = Colors.warning;
+      }
+      // Priority 5: Low and very low risk
+      else if (data.pregnancyRisk === 'low') {
+        borderColor = Colors.success;
+        borderWidth = 1;
+        backgroundColor = 'transparent';
+        textColor = Colors.textDark;
+      }
+      else if (data.pregnancyRisk === 'very_low') {
+        borderColor = Colors.success;
+        borderWidth = 1;
         backgroundColor = 'transparent';
         textColor = Colors.textDark;
       }
@@ -342,6 +386,20 @@ export default function CalendarScreen() {
         }
       }
 
+      // Get risk label for display
+      const getRiskLabel = (risk?: string) => {
+        switch (risk) {
+          case 'very_high': return 'VH';
+          case 'high': return 'H';
+          case 'medium': return 'M';
+          case 'low': return 'L';
+          case 'very_low': return 'VL';
+          default: return '';
+        }
+      };
+
+      const riskLabel = getRiskLabel(data.pregnancyRisk);
+
       // Apply styling if we have markers
       if (borderWidth > 0) {
         customStyles = {
@@ -351,11 +409,14 @@ export default function CalendarScreen() {
             borderWidth,
             borderStyle,
             backgroundColor,
+            flexDirection: 'column' as const,
           },
           text: {
             ...baseTextStyle,
             color: textColor,
             fontWeight: borderWidth >= 3 ? 'bold' : borderWidth >= 2 ? '600' : '500',
+            fontSize: riskLabel ? 12 : 14, // Smaller font if we have risk label
+            marginBottom: riskLabel ? -2 : 0,
           }
         };
       }
@@ -437,6 +498,12 @@ export default function CalendarScreen() {
         selectedColor: isSelected ? (borderColor || Colors.primary) : undefined,
         selected: isSelected,
         customStyles: Object.keys(customStyles).length > 0 ? customStyles : undefined,
+        // Add a dots array for multi-dot display if needed
+        dots: riskLabel ? [{
+          key: 'risk',
+          color: borderColor || Colors.primary,
+          selectedDotColor: borderColor || Colors.primary,
+        }] : undefined,
       };
     });
     
@@ -454,12 +521,24 @@ export default function CalendarScreen() {
   const getSelectedDateInfo = () => {
     const data = cycleData[selectedDate];
     
-    // Calculate cycle day for selected date
-    const today = new Date();
-    const selectedDateObj = new Date(selectedDate);
-    const diffTime = selectedDateObj.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const cycleDay = 14 + diffDays; // Mock current cycle day as 14
+    // Use actual cycle day from data if available, otherwise calculate properly
+    let cycleDay = data?.cycleDay || 1;
+    
+    // If no cycle day in data, calculate based on period dates
+    if (!data?.cycleDay && userPeriodDates.length > 0) {
+      const selectedDateObj = new Date(selectedDate);
+      
+      // Find the most recent period start before or on the selected date
+      const periodsBeforeSelected = userPeriodDates
+        .filter(periodDate => new Date(periodDate) <= selectedDateObj)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+      
+      if (periodsBeforeSelected.length > 0) {
+        const lastPeriodDate = new Date(periodsBeforeSelected[0]);
+        const daysDiff = Math.floor((selectedDateObj.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
+        cycleDay = Math.max(1, daysDiff + 1);
+      }
+    }
     
     if (!data) {
       return {
@@ -609,10 +688,12 @@ export default function CalendarScreen() {
                 <View style={[
                   styles.riskBadge, 
                   { 
-                    backgroundColor: cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error + '20' :
+                    backgroundColor: cycleData[selectedDate]?.pregnancyRisk === 'very_high' ? '#D32F2F20' :
+                                   cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error + '20' :
                                    cycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning + '20' : 
                                    Colors.success + '20',
-                    borderColor: cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
+                    borderColor: cycleData[selectedDate]?.pregnancyRisk === 'very_high' ? '#D32F2F' :
+                               cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
                                cycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning : 
                                Colors.success
                   }
@@ -620,13 +701,15 @@ export default function CalendarScreen() {
                   <Text style={[
                     styles.riskText,
                     { 
-                      color: cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
+                      color: cycleData[selectedDate]?.pregnancyRisk === 'very_high' ? '#D32F2F' :
+                             cycleData[selectedDate]?.pregnancyRisk === 'high' ? Colors.error :
                              cycleData[selectedDate]?.pregnancyRisk === 'medium' ? Colors.warning : 
                              Colors.success
                     }
                   ]}>
-                    {cycleData[selectedDate]?.pregnancyRisk?.toUpperCase()} 
-                    {cycleData[selectedDate]?.pregnancyRisk === 'high' ? ' 🚨' : 
+                    {cycleData[selectedDate]?.pregnancyRisk?.replace('_', ' ').toUpperCase()} 
+                    {cycleData[selectedDate]?.pregnancyRisk === 'very_high' ? ' 🔴' :
+                     cycleData[selectedDate]?.pregnancyRisk === 'high' ? ' 🚨' : 
                      cycleData[selectedDate]?.pregnancyRisk === 'medium' ? ' ⚠️' : ' ✅'}
                   </Text>
                 </View>
@@ -781,32 +864,41 @@ export default function CalendarScreen() {
           </View>
 
           <View style={styles.legendSection}>
-            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>⚠️ Pregnancy Risk</Text>
+            <Text style={[styles.legendSectionTitle, { color: colors.text }]}>⚠️ Pregnancy Risk Levels</Text>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.error + '08',
-                  borderWidth: 2,
-                  borderColor: Colors.error,
+                  backgroundColor: '#D32F2F15',
+                  borderWidth: 3,
+                  borderColor: '#D32F2F',
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>High Risk 🚨</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>Very High (VH) 🔴</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: Colors.warning + '08',
+                  backgroundColor: Colors.error + '10',
                   borderWidth: 2,
-                  borderColor: Colors.warning,
+                  borderColor: Colors.error,
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Medium Risk ⚠️</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>High (H) 🚨</Text>
               </View>
             </View>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendIndicator, { 
-                  backgroundColor: 'transparent',
-                  borderWidth: 0,
+                  backgroundColor: Colors.warning + '10',
+                  borderWidth: 2,
+                  borderColor: Colors.warning,
                 }]} />
-                <Text style={[styles.legendText, { color: colors.text }]}>Safe Days ✅</Text>
+                <Text style={[styles.legendText, { color: colors.text }]}>Medium (M) ⚠️</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { 
+                  backgroundColor: 'transparent',
+                  borderWidth: 1,
+                  borderColor: Colors.success,
+                }]} />
+                <Text style={[styles.legendText, { color: colors.text }]}>Low/Safe (L/VL) ✅</Text>
               </View>
             </View>
           </View>
@@ -841,7 +933,8 @@ export default function CalendarScreen() {
 
           <View style={styles.noteSection}>
             <Text style={[styles.noteText, { color: Colors.textMedium }]}>
-              💡 Tip: Thicker borders indicate period start/end dates. Dashed borders show predictions.
+              💡 Tips: Thicker borders indicate period start/end dates. Dashed borders show predictions.
+              {'\n'}🏷️ Risk labels: VH=Very High, H=High, M=Medium, L=Low, VL=Very Low
             </Text>
           </View>
         </Card>

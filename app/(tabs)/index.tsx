@@ -82,20 +82,58 @@ export default function DashboardScreen() {
       // Get all periods to calculate current cycle day
       const periods = await cycleDataService.getAllPeriods();
       
-      if (periods.length > 0) {
+      // Filter out any future periods (likely test/invalid data)
+      const validPeriods = periods.filter(period => {
+        const periodDate = new Date(period.startDate);
+        const today = new Date();
+        return periodDate <= today;
+      });
+      
+      console.log('Period data loaded:', {
+        totalPeriods: periods.length,
+        validPeriods: validPeriods.length,
+        futurePeriods: periods.length - validPeriods.length
+      });
+      
+      if (validPeriods.length > 0) {
         try {
           // Try to get predictions, but handle gracefully if no data
           const predictions = await cycleDataService.calculatePredictions();
           
           // Find the most recent period
-          const recentPeriods = periods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          const recentPeriods = validPeriods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
           const lastPeriod = recentPeriods[0];
+          
+          console.log('Dashboard cycle calculation:', {
+            today,
+            lastPeriodDate: lastPeriod.startDate,
+            totalPeriods: periods.length
+          });
           
           // Calculate current cycle day
           const lastPeriodDate = new Date(lastPeriod.startDate);
           const todayDate = new Date(today);
           const daysDiff = Math.floor((todayDate.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
-          const currentCycleDay = daysDiff + 1;
+          
+          // Ensure cycle day is always positive and reasonable
+          let currentCycleDay = Math.max(1, daysDiff + 1);
+          
+          // If the last period is in the future or cycle day is unreasonably high, handle gracefully
+          if (daysDiff < 0) {
+            console.warn('Last period date is in the future, using cycle day 1');
+            currentCycleDay = 1;
+          } else if (currentCycleDay > 60) {
+            // If it's been more than 60 days, likely need a new cycle
+            console.warn('Cycle day is very high, possible missed period tracking');
+            currentCycleDay = Math.min(currentCycleDay, 60);
+          }
+          
+          console.log('Calculated cycle day:', {
+            daysDiff,
+            currentCycleDay,
+            lastPeriodDate: lastPeriod.startDate,
+            today
+          });
           
           // Calculate days until next period
           const daysUntilNext = Math.max(0, cycleStats.averageCycleLength - currentCycleDay + 1);
@@ -108,25 +146,36 @@ export default function DashboardScreen() {
             phase: currentPhase,
             daysUntilNextPeriod: daysUntilNext,
             averageCycleLength: cycleStats.averageCycleLength,
-            currentStreak: periods.length,
+            currentStreak: validPeriods.length,
           });
         } catch (predictionError) {
           console.log('Using basic cycle calculation due to limited data');
           // Use basic calculation if predictions fail
-          const recentPeriods = periods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          const recentPeriods = validPeriods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
           const lastPeriod = recentPeriods[0];
           
           const lastPeriodDate = new Date(lastPeriod.startDate);
           const todayDate = new Date(today);
           const daysDiff = Math.floor((todayDate.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
-          const currentCycleDay = daysDiff + 1;
+          
+          // Ensure cycle day is always positive and reasonable
+          let currentCycleDay = Math.max(1, daysDiff + 1);
+          
+          // If the last period is in the future or cycle day is unreasonably high, handle gracefully
+          if (daysDiff < 0) {
+            console.warn('Last period date is in the future, using cycle day 1');
+            currentCycleDay = 1;
+          } else if (currentCycleDay > 60) {
+            console.warn('Cycle day is very high, possible missed period tracking');
+            currentCycleDay = Math.min(currentCycleDay, 60);
+          }
           
           setCycleData({
             currentDay: currentCycleDay,
             phase: CyclePhase.FOLLICULAR,
             daysUntilNextPeriod: Math.max(0, 28 - currentCycleDay + 1),
             averageCycleLength: cycleStats.averageCycleLength || 28,
-            currentStreak: periods.length,
+            currentStreak: validPeriods.length,
           });
         }
       } else {
